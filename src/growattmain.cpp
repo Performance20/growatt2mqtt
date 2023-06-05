@@ -47,9 +47,26 @@ char fullClientID[CLIENT_ID_SIZE];
 char topicRoot[TOPPIC_ROOT_SIZE]; // MQTT root topic for the device, + client ID
 
 os_timer_t myTimer;
-//ESP8266WebServer server(80);
+
+static const char PAGE_HELLO[] = R"(
+{
+  "uri": "/",
+  "title": "Hello",
+  "menu": false,
+  "element": [
+    {
+      "name": "caption",
+      "type": "ACText",
+      "value": "Hello, World"
+    },
+  ]
+}
+)";
+
+
 ESP8266WebServer server(80);
 AutoConnect      Portal(server);
+AutoConnectConfig autocconfig;
 
 WiFiClient espClient;
 PubSubClient mqtt(mqtt_server, mqtt_server_port, espClient);
@@ -395,12 +412,12 @@ void callback(char *topic, byte *payload, unsigned int length)
 #endif    
   }
 }
-
+/*
 void rootPage() {
   char content[] = "Growatt Solar Inverter to MQTT Gateway";
   server.send(200, "text/plain", content);
 }
-
+*/
 void setup()
 {
   Serial.begin(SERIAL_RATE);
@@ -415,6 +432,7 @@ void setup()
   checkWifi = true;
 
   loadEEpromData();
+
 #ifdef DEBUG_SERIAL
   Serial.println(F("Load Update values"));
   Serial.printf("Values via Modbus: %d sec\n", config.modbus_update_sec);
@@ -430,7 +448,12 @@ void setup()
     Serial.println("STA Failed to configure");
   }
 #endif
+  autocconfig.ota = AC_OTA_BUILTIN;
+  Portal.config(autocconfig);
+  Portal.load(PAGE_HELLO);
+
   //  AutoConnect AP - Configure SSID and password for Captive Portal
+  /*
   server.on("/", rootPage);
   if (Portal.begin()) 
   {
@@ -445,7 +468,7 @@ void setup()
     Serial.println("Failed to connect to WiFi");
     ESP.restart();
   }
-
+*/
   // Set up the fully client ID
   byte mac[6]; // the MAC address of your Wifi shield
   WiFi.macAddress(mac);
