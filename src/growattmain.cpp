@@ -14,17 +14,8 @@
 // - To power from mains: Hi-Link 5V power supply (https://www.aliexpress.com/item/1005001484531375.html), fuseholder and 1A fuse, and varistor
 
 #include <Arduino.h>
-#if defined(ESP8266)
 #include <ESP8266WiFi.h>      // Wifi connection
-#include <ESPAsyncTCP.h>
-#include <ESPAsyncWebServer.h>
-//#include <ESP8266WebServer.h> // Web server for general HTTP response
-#elif defined(ESP32)
-#include <WiFi.h>
-#include <AsyncTCP.h>
-#include <ESPAsyncWebServer.h>
-#endif
-#include <ESPConnect.h>
+#include <ESP8266WebServer.h> // Web server for general HTTP response
 #include <PubSubClient.h>     // MQTT support
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
@@ -32,6 +23,7 @@
 #include "settings.h"
 #include "growattInterface.h"
 #include <EEPROM.h>
+#include <AutoConnect.h>
 
 #ifdef AHTXX_SENSOR
 #include <AHT10.h>
@@ -56,7 +48,9 @@ char topicRoot[TOPPIC_ROOT_SIZE]; // MQTT root topic for the device, + client ID
 
 os_timer_t myTimer;
 //ESP8266WebServer server(80);
-AsyncWebServer server(80);
+ESP8266WebServer server(80);
+AutoConnect      Portal(server);
+
 WiFiClient espClient;
 PubSubClient mqtt(mqtt_server, mqtt_server_port, espClient);
 
@@ -402,6 +396,11 @@ void callback(char *topic, byte *payload, unsigned int length)
   }
 }
 
+void rootPage() {
+  char content[] = "Growatt Solar Inverter to MQTT Gateway";
+  server.send(200, "text/plain", content);
+}
+
 void setup()
 {
   Serial.begin(SERIAL_RATE);
@@ -432,10 +431,8 @@ void setup()
   }
 #endif
   //  AutoConnect AP - Configure SSID and password for Captive Portal
-  ESPConnect.autoConnect("Growatt2MQTT");
-  
-// Begin connecting to previous WiFi or start autoConnect AP if unable to connect
-  if (ESPConnect.begin(&server))
+  server.on("/", rootPage);
+  if (Portal.begin()) 
   {
     Serial.println("");
     Serial.println("Connected to WiFi");
@@ -448,6 +445,7 @@ void setup()
     Serial.println("Failed to connect to WiFi");
     ESP.restart();
   }
+
   // Set up the fully client ID
   byte mac[6]; // the MAC address of your Wifi shield
   WiFi.macAddress(mac);
@@ -473,12 +471,6 @@ void setup()
     // Create the 1 second timer interrupt
     os_timer_setfn(&myTimer, timerCallback, NULL);
     os_timer_arm(&myTimer, 1000, true);
-
-    server.on("/", HTTP_GET, [&](AsyncWebServerRequest *request)
-              { request->send(200, "text/plain", "Growatt Solar Inverter to MQTT Gateway"); });
-
-    server.begin();
-    Serial.println(F("HTTP server started"));
 
     // Set up the MQTT server connection
     if (strlen(mqtt_server) > 0)
