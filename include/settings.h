@@ -1,3 +1,6 @@
+#ifndef SETTINGS_H
+#define SETTINGS_H
+
 #define DEBUG_SERIAL    
 //#define DEBUG_MQTT       
 #define useModulPower   
@@ -31,3 +34,6 @@ IPAddress gateway(192, 168, 1, 254);          // Set your Gateway IP address
 IPAddress subnet(255, 255, 255, 0);
 IPAddress primaryDNS(192, 168, 1, 254);   //optional
 IPAddress secondaryDNS(8, 8, 4, 4); //optional
+
+
+#endif

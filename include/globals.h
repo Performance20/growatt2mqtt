@@ -1,3 +1,6 @@
+#ifndef GLOBALS_H
+#define GLOBALS_H
+
 unsigned long uptime, seconds;
 bool holdingregisters = true;
 const char buildversion[]="v1.3.0Helge";
@@ -17,5 +20,5 @@ typedef struct
 
 configData_t  config;
 
-
+#endif
 

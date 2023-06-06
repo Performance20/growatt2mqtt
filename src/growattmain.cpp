@@ -19,11 +19,14 @@
 #include <PubSubClient.h>     // MQTT support
 #include <WiFiUdp.h>
 #include <ArduinoOTA.h>
+
+#include <EEPROM.h>
+#include <AutoConnect.h>
+
 #include "globals.h"
 #include "settings.h"
 #include "growattInterface.h"
-#include <EEPROM.h>
-#include <AutoConnect.h>
+#include "webpage.h"
 
 #ifdef AHTXX_SENSOR
 #include <AHT10.h>
@@ -47,21 +50,6 @@ char fullClientID[CLIENT_ID_SIZE];
 char topicRoot[TOPPIC_ROOT_SIZE]; // MQTT root topic for the device, + client ID
 
 os_timer_t myTimer;
-
-static const char PAGE_HELLO[] = R"(
-{
-  "uri": "/",
-  "title": "Hello",
-  "menu": false,
-  "element": [
-    {
-      "name": "caption",
-      "type": "ACText",
-      "value": "Hello, World"
-    },
-  ]
-}
-)";
 
 
 ESP8266WebServer server(80);
