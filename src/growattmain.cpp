@@ -453,8 +453,8 @@ void setup()
   Portal.load(PAGE_HELLO);
 
   //  AutoConnect AP - Configure SSID and password for Captive Portal
-  /*
-  server.on("/", rootPage);
+  
+  //server.on("/", rootPage);
   if (Portal.begin()) 
   {
     Serial.println("");
@@ -468,7 +468,7 @@ void setup()
     Serial.println("Failed to connect to WiFi");
     ESP.restart();
   }
-*/
+
   // Set up the fully client ID
   byte mac[6]; // the MAC address of your Wifi shield
   WiFi.macAddress(mac);
@@ -502,7 +502,7 @@ void setup()
       mqtt.setBufferSize(1024);
       mqtt.setCallback(callback);
     }
-
+/*
     // OTA Firmware Update
     // Port defaults to 8266
     // ArduinoOTA.setPort(8266);
@@ -536,6 +536,7 @@ void setup()
       else if (error == OTA_END_ERROR) Serial.println("End Failed"); });
 
     ArduinoOTA.begin();
+    */
 }
 
 void loop()
@@ -547,7 +548,7 @@ void loop()
   float valueHum;
 #endif
 
-  ArduinoOTA.handle();
+  //ArduinoOTA.handle();
 
   // Handle HTTP server requests
   //server.handleClient();
@@ -611,7 +612,7 @@ void loop()
     }
     updateStatus = false;
   }
-
+/*
   if (checkWifi == true)
   {
     if (WiFi.status() != WL_CONNECTED)
@@ -622,6 +623,6 @@ void loop()
     }
     checkWifi = false;
   }
-
+*/
   
 }

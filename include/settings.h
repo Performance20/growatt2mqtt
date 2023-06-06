@@ -1,4 +1,4 @@
-//#define DEBUG_SERIAL    
+#define DEBUG_SERIAL    
 //#define DEBUG_MQTT       
 #define useModulPower   
 #define AHTXX_SENSOR               // add support for the AHT10, AHT15, AHT20 sensor family 
