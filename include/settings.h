@@ -4,7 +4,7 @@
 #define DEBUG_SERIAL    
 //#define DEBUG_MQTT       
 #define useModulPower   
-#define AHTXX_SENSOR               // add support for the AHT10, AHT15, AHT20 sensor family 
+//#define AHTXX_SENSOR               // add support for the AHT10, AHT15, AHT20 sensor family 
 
 #define SERIAL_RATE     115200    // Serial speed for status info
 #define MAX485_DE       16        // D0, DE pin on the TTL to RS485 converter

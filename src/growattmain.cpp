@@ -17,10 +17,10 @@
 #include <ESP8266WiFi.h>      // Wifi connection
 #include <ESP8266WebServer.h> // Web server for general HTTP response
 #include <PubSubClient.h>     // MQTT support
-#include <WiFiUdp.h>
-#include <ArduinoOTA.h>
+//#include <WiFiUdp.h>
+//#include <ArduinoOTA.h>
 
-#include <EEPROM.h>
+//#include <EEPROM.h>
 #include <AutoConnect.h>
 
 #include "globals.h"
@@ -51,13 +51,28 @@ char topicRoot[TOPPIC_ROOT_SIZE]; // MQTT root topic for the device, + client ID
 
 os_timer_t myTimer;
 
-
-ESP8266WebServer server(80);
-AutoConnect      Portal(server);
-AutoConnectConfig autocconfig;
-
 WiFiClient espClient;
 PubSubClient mqtt(mqtt_server, mqtt_server_port, espClient);
+
+const char *URL_MQTT_HOME = "/_ac";
+
+ESP8266WebServer server(80);
+AutoConnect      portal(server);
+AutoConnectConfig autocconfig;
+AutoConnectAux auxTest;
+/*
+ACText(header, "MQTT broker settings");
+ACText(caption1, "Publishing the WiFi...");
+ACSubmit(save, "SAVE", "/mqtt_save");
+AutoConnectAux aux1("/mqtt_setting", "MQTT Setting", true, {header, caption1, save});
+
+ACText(caption2, "Save parameters");
+ACSubmit(start, "START", "/mqtt_start");
+AutoConnectAux aux2("/mqtt_save", "MQTT Setting", false, {caption2, start});
+
+AutoConnectAux aux3("/mqtt_start", "MQTT Start");
+*/
+
 
 #ifdef AHTXX_SENSOR
 AHT10 sensorAHT15(AHT10_ADDRESS_0X38);
@@ -403,11 +418,29 @@ void callback(char *topic, byte *payload, unsigned int length)
 /*
 void rootPage() {
   char content[] = "Growatt Solar Inverter to MQTT Gateway";
-  server.send(200, "text/plain", content);
+  Server.send(200, "text/plain", content);
 }
 */
+
+void handleRoot()
+{
+  String content =
+      "<html>"
+      "<head>"
+      "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+      "</head>"
+      "<body>"
+      "<p style=\"padding-top:5px;text-align:center\">" AUTOCONNECT_LINK(COG_24) "</p>"
+                                                                                 "</body>"
+                                                                                 "</html>";
+
+  //content.replace("{{CHANNEL}}", channelId);
+  server.send(200, "text/html", content);
+}
+
 void setup()
 {
+  delay(1000);
   Serial.begin(SERIAL_RATE);
   Serial.println(F("\nGrowatt Solar Inverter to MQTT Gateway"));
   // Init outputs, RS485 in receive mode
@@ -419,7 +452,7 @@ void setup()
   updateStatus = true;
   checkWifi = true;
 
-  loadEEpromData();
+  //loadEEpromData();
 
 #ifdef DEBUG_SERIAL
   Serial.println(F("Load Update values"));
@@ -436,26 +469,52 @@ void setup()
     Serial.println("STA Failed to configure");
   }
 #endif
-  autocconfig.ota = AC_OTA_BUILTIN;
-  Portal.config(autocconfig);
-  Portal.load(PAGE_HELLO);
-
-  //  AutoConnect AP - Configure SSID and password for Captive Portal
   
-  //server.on("/", rootPage);
-  if (Portal.begin()) 
-  {
-    Serial.println("");
-    Serial.println("Connected to WiFi");
-    Serial.println("IPAddress: " + WiFi.localIP().toString());
-    Serial.print("Signal [RSSI]: ");
-    Serial.println(WiFi.RSSI());
-  }
+  autocconfig.ota = AC_OTA_BUILTIN;
+  autocconfig.autoReconnect = true; // Attempt automatic reconnection.
+  autocconfig.reconnectInterval = 6; // Seek interval time is 180[s].
+  autocconfig.retainPortal = true;   // Keep the captive portal open.
+  autocconfig.homeUri = URL_MQTT_HOME;
+  autocconfig.bootUri = AC_ONBOOTURI_HOME;
+  autocconfig.autoReconnect = true;
+  autocconfig.title = "Growatt2MQTT";
+  portal.config(autocconfig);
+  /*
+      server.on("/hello", []()
+                { server.send(200, "text/html", String(F("<html>"
+                                                         "<head><meta name='viewport' content='width=device-width,initial-scale=1.0'></head>"
+                                                         "<body><h2>Hello, world</h2></body>"
+                                                         "</html>"))); });
+
+      portal.append("/hello", "HELLO"); // Adds an item as HELLO into the menu
+  */
+  portal.load(PAGE_MQTT);
+  //server.on(URL_MQTT_HOME, handleRoot);
+
+  /*
+      Server.on("/", rootPage);
+      if (Portal.begin())
+      {
+        Serial.println("WiFi connected: " + WiFi.localIP().toString());
+      }
+    */
+  //  AutoConnect AP - Configure SSID and password for Captive Portal
+
+  
+  if (portal.begin())
+    {
+      Serial.println("");
+      Serial.println("Connected to WiFi");
+      Serial.println("IPAddress: " + WiFi.localIP().toString());
+      Serial.print("Signal [RSSI]: ");
+      Serial.println(WiFi.RSSI());
+    }
   else
-  {
-    Serial.println("Failed to connect to WiFi");
-    ESP.restart();
-  }
+    {
+      Serial.println("Failed to connect to WiFi");
+      delay(1000);
+      ESP.restart();
+    }
 
   // Set up the fully client ID
   byte mac[6]; // the MAC address of your Wifi shield
@@ -467,150 +526,154 @@ void setup()
   Serial.println(fullClientID);
 
   // Set up the Modbus line
-  growattInterface.initGrowatt();
+  // growattInterface.initGrowatt();
   Serial.println("Modbus connection is set up");
 
-  #ifdef AHTXX_SENSOR
-    // AHT15 connection check
-    ath15_connected = sensorAHT15.begin(SDA_PIN, SCL_PIN);
-    if (ath15_connected != true)
-    {
-      Serial.println(F("AHT15 sensor not connected or fail to load calibration coefficient"));
-    }
-  #endif
+#ifdef AHTXX_SENSOR
+        // AHT15 connection check
+        //ath15_connected = sensorAHT15.begin(SDA_PIN, SCL_PIN);
+        if (ath15_connected != true)
+        {
+          Serial.println(F("AHT15 sensor not connected or fail to load calibration coefficient"));
+        }
+      #endif
+        /*
+                // Create the 1 second timer interrupt
+                os_timer_setfn(&myTimer, timerCallback, NULL);
+                os_timer_arm(&myTimer, 1000, true);
 
-    // Create the 1 second timer interrupt
-    os_timer_setfn(&myTimer, timerCallback, NULL);
-    os_timer_arm(&myTimer, 1000, true);
+                        // Set up the MQTT server connection
+                        if (strlen(mqtt_server) > 0)
+                        {
+                          mqtt.setServer(mqtt_server, mqtt_server_port);
+                          mqtt.setBufferSize(1024);
+                          mqtt.setCallback(callback);
+                        }
 
-    // Set up the MQTT server connection
-    if (strlen(mqtt_server) > 0)
-    {
-      mqtt.setServer(mqtt_server, mqtt_server_port);
-      mqtt.setBufferSize(1024);
-      mqtt.setCallback(callback);
-    }
-/*
-    // OTA Firmware Update
-    // Port defaults to 8266
-    // ArduinoOTA.setPort(8266);
+                        // OTA Firmware Update
+                        // Port defaults to 8266
+                        // ArduinoOTA.setPort(8266);
 
-    // Hostname defaults to esp8266-[ChipID]
-    ArduinoOTA.setHostname(fullClientID);
+                        // Hostname defaults to esp8266-[ChipID]
+                        ArduinoOTA.setHostname(fullClientID);
 
-    // No authentication by default
-    // ArduinoOTA.setPassword((const char *)"123");
+                        // No authentication by default
+                        // ArduinoOTA.setPassword((const char *)"123");
 
-    ArduinoOTA.onStart([]()
-                       {
-      os_timer_disarm(&myTimer);
-      Serial.println("Start"); });
+                        ArduinoOTA.onStart([]()
+                                           {
+                          os_timer_disarm(&myTimer);
+                          Serial.println("Start"); });
 
-    ArduinoOTA.onEnd([]()
-                     {
-      Serial.println("\nEnd");
-      os_timer_arm(&myTimer, 1000, true); });
+                        ArduinoOTA.onEnd([]()
+                                         {
+                          Serial.println("\nEnd");
+                          os_timer_arm(&myTimer, 1000, true); });
 
-    ArduinoOTA.onProgress([](unsigned int progress, unsigned int total)
-                          { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); });
+                        ArduinoOTA.onProgress([](unsigned int progress, unsigned int total)
+                                              { Serial.printf("Progress: %u%%\r", (progress / (total / 100))); });
 
-    ArduinoOTA.onError([](ota_error_t error)
-                       {
-      Serial.printf("Error[%u]: ", error);
-      if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
-      else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
-      else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
-      else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
-      else if (error == OTA_END_ERROR) Serial.println("End Failed"); });
+                        ArduinoOTA.onError([](ota_error_t error)
+                                           {
+                          Serial.printf("Error[%u]: ", error);
+                          if (error == OTA_AUTH_ERROR) Serial.println("Auth Failed");
+                          else if (error == OTA_BEGIN_ERROR) Serial.println("Begin Failed");
+                          else if (error == OTA_CONNECT_ERROR) Serial.println("Connect Failed");
+                          else if (error == OTA_RECEIVE_ERROR) Serial.println("Receive Failed");
+                          else if (error == OTA_END_ERROR) Serial.println("End Failed"); });
 
-    ArduinoOTA.begin();
-    */
+                        ArduinoOTA.begin();
+                        */
 }
 
 void loop()
 {
-  char value[MAX_JSON_TOPIC_LENGTH];
-  char topic[MAX_ROOT_TOPIC_LENGTH];
-#ifdef AHTXX_SENSOR
-  float valueTemp;
-  float valueHum;
-#endif
 
-  //ArduinoOTA.handle();
+    portal.handleClient();
 
-  // Handle HTTP server requests
-  //server.handleClient();
+    /*
+    char value[MAX_JSON_TOPIC_LENGTH];
+    char topic[MAX_ROOT_TOPIC_LENGTH];
+  #ifdef AHTXX_SENSOR
+    float valueTemp;
+    float valueHum;
+  #endif
 
-  // Handle MQTT connection/reconnection
-  if (strlen(mqtt_server) > 0)
-  {
-    if (!mqtt.connected())
-    {
-      reconnect();
-    }
-    mqtt.loop();
-  }
+    //ArduinoOTA.handle();
 
-  // Query the modbus device
-  if (updateRegister == true)
-  {
-    ReadInputRegisters();
-    if (holdingregisters == true)
-    {
-      // Read the holding registers
-      ReadHoldingRegisters();  //Settings
-    }
-    updateRegister = false;
-  }
+    // Handle HTTP server requests
+    //server.handleClient();
 
-  // Send RSSI and uptime status
-  if (updateStatus == true)
-  {
-    // Send MQTT update
+    // Handle MQTT connection/reconnection
     if (strlen(mqtt_server) > 0)
     {
-#ifdef AHTXX_SENSOR                                                   // recomended polling frequency 8sec..30sec
-      if (ath15_connected != true)
+      if (!mqtt.connected())
       {
-        ath15_connected = sensorAHT15.begin(SDA_PIN, SCL_PIN);
+        reconnect();
       }
-      if (ath15_connected == true)
-      {
-        valueTemp = sensorAHT15.readTemperature(AHT10_FORCE_READ_DATA); // read 6-bytes over I2C
-        valueHum = sensorAHT15.readHumidity(AHT10_USE_READ_DATA);
-      }
-      else
-      {
-        valueTemp = 0;
-        valueHum = 0;
-      }
-#ifdef DEBUG_SERIAL
-      Serial.printf("Temperature: %.2f °C      Humidity: %.2f %%\n", valueTemp, valueHum);
-#endif
-      snprintf(value, MAX_JSON_TOPIC_LENGTH, "{\"rssi\":%d,\"uptime\":%lu,\"ssid\":\"%s\",\"ip\":\"%d.%d.%d.%d\",\"clientid\":\"%s\",\"version\":\"%s\",\"modbusUpdate\":%d,\"statusUpdate\":%d,\"Wifi check\":%d,\"temperature\":%.2f,\"humidity\":%.2f}", WiFi.RSSI(), uptime, WiFi.SSID().c_str(), WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3], fullClientID, buildversion, config.modbus_update_sec, config.status_update_sec, config.wificheck_sec, valueTemp, valueHum);
-#else
-      snprintf(value, MAX_JSON_TOPIC_LENGTH, "{\"rssi\":%d,\"uptime\":%lu,\"ssid\":\"%s\",\"ip\":\"%d.%d.%d.%d\",\"clientid\":\"%s\",\"version\":\"%s\",\"modbusUpdate\":%d,\"statusUpdate\":%d,\"Wifi check\":%d}", WiFi.RSSI(), uptime, WiFi.SSID().c_str(), WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3], fullClientID, buildversion, config.modbus_update_sec, config.status_update_sec, config.wificheck_sec);
-#endif
-      snprintf(topic, MAX_ROOT_TOPIC_LENGTH, "%s/%s", topicRoot, "status");
-      mqtt.publish(topic, value);
-#ifdef DEBUG_MQTT
-      Serial.println(value);
-      Serial.println(F("MQTT status sent"));
-#endif      
+      mqtt.loop();
     }
-    updateStatus = false;
-  }
-/*
-  if (checkWifi == true)
-  {
-    if (WiFi.status() != WL_CONNECTED)
+
+    // Query the modbus device
+    if (updateRegister == true)
     {
-      Serial.println("Reconnecting to wifi...");
-      WiFi.reconnect();
-      uptime = 0;
+      ReadInputRegisters();
+      if (holdingregisters == true)
+      {
+        // Read the holding registers
+        ReadHoldingRegisters();  //Settings
+      }
+      updateRegister = false;
     }
-    checkWifi = false;
-  }
-*/
+
+    // Send RSSI and uptime status
+    if (updateStatus == true)
+    {
+      // Send MQTT update
+      if (strlen(mqtt_server) > 0)
+      {
+  #ifdef AHTXX_SENSOR                                                   // recomended polling frequency 8sec..30sec
+        if (ath15_connected != true)
+        {
+          ath15_connected = sensorAHT15.begin(SDA_PIN, SCL_PIN);
+        }
+        if (ath15_connected == true)
+        {
+          valueTemp = sensorAHT15.readTemperature(AHT10_FORCE_READ_DATA); // read 6-bytes over I2C
+          valueHum = sensorAHT15.readHumidity(AHT10_USE_READ_DATA);
+        }
+        else
+        {
+          valueTemp = 0;
+          valueHum = 0;
+        }
+  #ifdef DEBUG_SERIAL
+        Serial.printf("Temperature: %.2f °C      Humidity: %.2f %%\n", valueTemp, valueHum);
+  #endif
+        snprintf(value, MAX_JSON_TOPIC_LENGTH, "{\"rssi\":%d,\"uptime\":%lu,\"ssid\":\"%s\",\"ip\":\"%d.%d.%d.%d\",\"clientid\":\"%s\",\"version\":\"%s\",\"modbusUpdate\":%d,\"statusUpdate\":%d,\"Wifi check\":%d,\"temperature\":%.2f,\"humidity\":%.2f}", WiFi.RSSI(), uptime, WiFi.SSID().c_str(), WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3], fullClientID, buildversion, config.modbus_update_sec, config.status_update_sec, config.wificheck_sec, valueTemp, valueHum);
+  #else
+        snprintf(value, MAX_JSON_TOPIC_LENGTH, "{\"rssi\":%d,\"uptime\":%lu,\"ssid\":\"%s\",\"ip\":\"%d.%d.%d.%d\",\"clientid\":\"%s\",\"version\":\"%s\",\"modbusUpdate\":%d,\"statusUpdate\":%d,\"Wifi check\":%d}", WiFi.RSSI(), uptime, WiFi.SSID().c_str(), WiFi.localIP()[0], WiFi.localIP()[1], WiFi.localIP()[2], WiFi.localIP()[3], fullClientID, buildversion, config.modbus_update_sec, config.status_update_sec, config.wificheck_sec);
+  #endif
+        snprintf(topic, MAX_ROOT_TOPIC_LENGTH, "%s/%s", topicRoot, "status");
+        mqtt.publish(topic, value);
+  #ifdef DEBUG_MQTT
+        Serial.println(value);
+        Serial.println(F("MQTT status sent"));
+  #endif
+      }
+      updateStatus = false;
+    }
+  
+    if (checkWifi == true)
+    {
+      if (WiFi.status() != WL_CONNECTED)
+      {
+        Serial.println("Reconnecting to wifi...");
+        WiFi.reconnect();
+        uptime = 0;
+      }
+      checkWifi = false;
+    }
+  */
   
 }
