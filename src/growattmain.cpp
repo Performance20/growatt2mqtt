@@ -59,46 +59,51 @@ const char* URL_MQTT_START   = "/mqtt_start";
 const char* URL_MQTT_CLEAR   = "/mqtt_clear";
 const char* URL_MQTT_STOP    = "/mqtt_stop";
 
-// Declare AutoConnectElements for the page asf `/mqtt_setting`
-ACStyle(style, "label+input,label+select{position:sticky;left:140px;width:204px!important;box-sizing:border-box;}");
-ACElement(header, "<h2 style='text-align:center;color:#2f4f4f;margin-top:10px;margin-bottom:10px'>MQTT Broker settings</h2>");
-ACText(caption, "Publish WiFi signal strength via MQTT, publishing the RSSI value of the ESP module to the ThingSpeak public channel.", "font-family:serif;color:#053d76", "", AC_Tag_P);
+/ In the declaration,
+// Declare AutoConnectElements for the page asf /mqtt_setting
+ACText(header, "<h2>MQTT broker settings</h2>", "text-align:center;color:#2f4f4f;padding:10px;");
+ACText(caption, "Publishing the WiFi signal strength to MQTT channel. RSSI value of ESP8266 to the channel created on ThingSpeak", "font-family:serif;color:#4682b4;");
 ACInput(mqttserver, "", "Server", "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$", "MQTT broker server");
-ACInput(apikey, "", "Uer API Key");
 ACInput(channelid, "", "Channel ID", "^[0-9]{6}$");
-ACInput(writekey, "", "Write API Key");
-ACElement(nl1, "<hr>");
-ACText(credential, "MQTT Device Credentials", "font-weight:bold;color:#1e81b0", "", AC_Tag_DIV);
-ACInput(clientid, "", "Client ID");
-ACInput(username, "", "Username");
-ACInput(password, "", "Password", "", "", AC_Tag_BR, AC_Input_Password);
-ACElement(nl2, "<hr>");
+ACInput(userkey, "", "User Key");
+ACInput(apikey, "", "API Key");
+ACElement(newline, "<hr>");
+ACCheckbox(uniqueid, "unique", "Use APID unique");
 ACRadio(period, { "30 sec.", "60 sec.", "180 sec." }, "Update period", AC_Vertical, 1);
-ACInput(hostname, "", "ESP host name", "^([a-zA-Z0-9]([a-zA-Z0-9-])*[a-zA-Z0-9]){1,24}$");
-ACSubmit(save, "Save&amp;Start", URL_MQTT_START);
-ACSubmit(discard, "Discard", URL_MQTT_HOME);
-ACSubmit(stop, "Stop publishing", URL_MQTT_STOP);
+ACSubmit(save, "Start", "mqtt_save");
+ACSubmit(discard, "Discard", "/");
 
-AutoConnectAux mqtt_setting(URL_MQTT_SETTING, "MQTT Setting", true, {
-  style,
+// Declare the custom Web page as /mqtt_setting and contains the AutoConnectElements
+AutoConnectAux mqtt_setting("/mqtt_setting", "MQTT Setting", true, {
   header,
   caption,
   mqttserver,
-  apikey,
   channelid,
-  writekey,
-  nl1,
-  credential,
-  clientid,
-  username,
-  password,
-  nl2,
+  userkey,
+  apikey,
+  newline,
+  uniqueid,
   period,
-  hostname,
+  newline,
   save,
-  discard,
-  stop
+  discard
 });
+
+// Declare AutoConnectElements for the page as /mqtt_save
+ACText(caption2, "<h4>Parameters available as:</h4>", "text-align:center;color:#2f4f4f;padding:10px;");
+ACText(parameters);
+ACSubmit(clear, "Clear channel", "/mqtt_clear");
+
+// Declare the custom Web page as /mqtt_save and contains the AutoConnectElements
+AutoConnectAux mqtt_save("/mqtt_save", "MQTT Setting", false, {
+  caption2,
+  parameters,
+  clear
+});
+
+// In the setup(),
+// Join the custom Web pages and performs begin
+  portal.join({ mqtt_setting, mqtt_save });
 
 WiFiClient espClient;
 PubSubClient mqtt(mqtt_server, mqtt_server_port, espClient);
@@ -108,7 +113,7 @@ PubSubClient mqtt(mqtt_server, mqtt_server_port, espClient);
 ESP8266WebServer server(80);
 AutoConnect      portal(server);
 AutoConnectConfig autocconfig;
-AutoConnectAux auxTest;
+//AutoConnectAux auxTest;
 
 
 #ifdef AHTXX_SENSOR
@@ -250,7 +255,7 @@ void saveConfig()
   EEPROM.end();
 }
 
-void loadEEpromData()
+void loadConfig()
 {
   EEPROM.begin(sizeof(config));
   EEPROM.get(EE_START_ADDR, config);
@@ -549,14 +554,8 @@ void setup()
   updateStatus = true;
   checkWifi = true;
 
-  //loadEEpromData();
 
-#ifdef DEBUG_SERIAL
-  Serial.println(F("Load Update values"));
-  Serial.printf("Values via Modbus: %d sec\n", config.modbus_update_sec);
-  Serial.printf("Status Update: %d sec\n", config.status_update_sec);
-  Serial.printf("Wifi Check: %d sec\n", config.wificheck_sec);
-#endif
+
 
   // Connect to Wifi
 #ifdef FIXEDIP
@@ -582,14 +581,20 @@ void setup()
   // Join AutoConnectAux pages.
   portal.join({ mqtt_setting});
   portal.on(URL_MQTT_SETTING, auxMQTTSetting);
-  
+
+
   // Restore saved MQTT broker setting values.
   // This example stores all setting parameters as a set of AutoConnectElement,
   // so they can be restored in bulk using `AutoConnectAux::loadElement`.
   AutoConnectAux& settings_mqtt = *portal.aux(URL_MQTT_SETTING);
-  //getParams(config);  EPROMM parameter load
+  loadConfig(); //  EPROMM parameter load
   loadParams(settings_mqtt);
-
+#ifdef DEBUG_SERIAL
+  Serial.println(F("Load Update values"));
+  Serial.printf("Values via Modbus: %d sec\n", config.modbus_update_sec);
+  Serial.printf("Status Update: %d sec\n", config.status_update_sec);
+  Serial.printf("Wifi Check: %d sec\n", config.wificheck_sec);
+#endif
   // This home page is the response content by requestHandler with WebServer,
   // it does not go through AutoConnect. Such pages register requestHandler
   // directly using `WebServer::on`.
