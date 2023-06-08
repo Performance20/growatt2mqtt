@@ -26,7 +26,7 @@
 #include "globals.h"
 #include "settings.h"
 #include "growattInterface.h"
-#include "webpage.h"
+//#include "webpage.h"
 
 #ifdef AHTXX_SENSOR
 #include <AHT10.h>
@@ -51,27 +51,64 @@ char topicRoot[TOPPIC_ROOT_SIZE]; // MQTT root topic for the device, + client ID
 
 os_timer_t myTimer;
 
+// URLs assigned to the custom web page.
+const char* PARAM_FILE       = "/param.json";
+const char* URL_MQTT_HOME    = "/";
+const char* URL_MQTT_SETTING = "/mqtt_setting";
+const char* URL_MQTT_START   = "/mqtt_start";
+const char* URL_MQTT_CLEAR   = "/mqtt_clear";
+const char* URL_MQTT_STOP    = "/mqtt_stop";
+
+// Declare AutoConnectElements for the page asf `/mqtt_setting`
+ACStyle(style, "label+input,label+select{position:sticky;left:140px;width:204px!important;box-sizing:border-box;}");
+ACElement(header, "<h2 style='text-align:center;color:#2f4f4f;margin-top:10px;margin-bottom:10px'>MQTT Broker settings</h2>");
+ACText(caption, "Publish WiFi signal strength via MQTT, publishing the RSSI value of the ESP module to the ThingSpeak public channel.", "font-family:serif;color:#053d76", "", AC_Tag_P);
+ACInput(mqttserver, "", "Server", "^(([a-zA-Z0-9]|[a-zA-Z0-9][a-zA-Z0-9\\-]*[a-zA-Z0-9])\\.)*([A-Za-z0-9]|[A-Za-z0-9][A-Za-z0-9\\-]*[A-Za-z0-9])$", "MQTT broker server");
+ACInput(apikey, "", "Uer API Key");
+ACInput(channelid, "", "Channel ID", "^[0-9]{6}$");
+ACInput(writekey, "", "Write API Key");
+ACElement(nl1, "<hr>");
+ACText(credential, "MQTT Device Credentials", "font-weight:bold;color:#1e81b0", "", AC_Tag_DIV);
+ACInput(clientid, "", "Client ID");
+ACInput(username, "", "Username");
+ACInput(password, "", "Password", "", "", AC_Tag_BR, AC_Input_Password);
+ACElement(nl2, "<hr>");
+ACRadio(period, { "30 sec.", "60 sec.", "180 sec." }, "Update period", AC_Vertical, 1);
+ACInput(hostname, "", "ESP host name", "^([a-zA-Z0-9]([a-zA-Z0-9-])*[a-zA-Z0-9]){1,24}$");
+ACSubmit(save, "Save&amp;Start", URL_MQTT_START);
+ACSubmit(discard, "Discard", URL_MQTT_HOME);
+ACSubmit(stop, "Stop publishing", URL_MQTT_STOP);
+
+AutoConnectAux mqtt_setting(URL_MQTT_SETTING, "MQTT Setting", true, {
+  style,
+  header,
+  caption,
+  mqttserver,
+  apikey,
+  channelid,
+  writekey,
+  nl1,
+  credential,
+  clientid,
+  username,
+  password,
+  nl2,
+  period,
+  hostname,
+  save,
+  discard,
+  stop
+});
+
 WiFiClient espClient;
 PubSubClient mqtt(mqtt_server, mqtt_server_port, espClient);
 
-const char *URL_MQTT_HOME = "/_ac";
+//const char *URL_MQTT_HOME = "/_ac";
 
 ESP8266WebServer server(80);
 AutoConnect      portal(server);
 AutoConnectConfig autocconfig;
 AutoConnectAux auxTest;
-/*
-ACText(header, "MQTT broker settings");
-ACText(caption1, "Publishing the WiFi...");
-ACSubmit(save, "SAVE", "/mqtt_save");
-AutoConnectAux aux1("/mqtt_setting", "MQTT Setting", true, {header, caption1, save});
-
-ACText(caption2, "Save parameters");
-ACSubmit(start, "START", "/mqtt_start");
-AutoConnectAux aux2("/mqtt_save", "MQTT Setting", false, {caption2, start});
-
-AutoConnectAux aux3("/mqtt_start", "MQTT Start");
-*/
 
 
 #ifdef AHTXX_SENSOR
@@ -80,6 +117,46 @@ AHT10 sensorAHT15(AHT10_ADDRESS_0X38);
 
 void callback(char *topic, byte *payload, unsigned int length);
 growattIF growattInterface(MAX485_RE_NEG, MAX485_DE, MAX485_RX, MAX485_TX);
+
+// Reflects the loaded channel settings to global variables; the publishMQTT
+// function uses those global variables to actuate ThingSpeak MQTT API.
+void setParams(AutoConnectAux& aux) 
+{
+  memset(&config, '\0', sizeof(configData_t));
+  strncpy(config.mqttServer, aux[F("mqttserver")].as<AutoConnectInput>().value.c_str(), sizeof(configData_t::mqttServer) - sizeof('\0'));
+  strncpy(config.apikey, aux[F("apikey")].as<AutoConnectInput>().value.c_str(), sizeof(configData_t::apikey) - sizeof('\0'));
+  strncpy(config.channelId, aux[F("channelid")].as<AutoConnectInput>().value.c_str(), sizeof(configData_t::channelId) - sizeof('\0'));
+  strncpy(config.writekey, aux[F("writekey")].as<AutoConnectInput>().value.c_str(), sizeof(configData_t::writekey) - sizeof('\0'));
+  strncpy(config.clientId, aux[F("clientid")].as<AutoConnectInput>().value.c_str(), sizeof(configData_t::clientId) - sizeof('\0'));
+  strncpy(config.username, aux[F("username")].as<AutoConnectInput>().value.c_str(), sizeof(configData_t::username) - sizeof('\0'));
+  strncpy(config.password, aux[F("password")].as<AutoConnectInput>().value.c_str(), sizeof(configData_t::password) - sizeof('\0'));
+  strncpy(config.hostname, aux[F("hostname")].as<AutoConnectInput>().value.c_str(), sizeof(configData_t::hostname) - sizeof('\0'));
+  config.publishInterval = aux[F("period")].as<AutoConnectRadio>().value().substring(0, 2).toInt() * 1000;
+}
+
+void loadParams(AutoConnectAux& aux) 
+{
+  aux[F("mqttserver")].as<AutoConnectInput>().value = config.mqttServer;
+  aux[F("apikey")].as<AutoConnectInput>().value = config.apikey;
+  aux[F("channelid")].as<AutoConnectInput>().value = config.channelId;
+  aux[F("writekey")].as<AutoConnectInput>().value = config.writekey;
+  aux[F("clientid")].as<AutoConnectInput>().value = config.clientId;
+  aux[F("username")].as<AutoConnectInput>().value = config.username;
+  aux[F("password")].as<AutoConnectInput>().value = config.password;
+  aux[F("hostname")].as<AutoConnectInput>().value = config.hostname;
+  aux[F("period")].as<AutoConnectRadio>().checked = config.publishInterval / (30 * 1000);
+  if (aux[F("period")].as<AutoConnectRadio>().checked > 3)
+    aux[F("period")].as<AutoConnectRadio>().checked = 3;
+}
+
+// The behavior of the auxMQTTSetting function below transfers the MQTT API
+// parameters to the value of each AutoConnectInput element on the custom web
+// page. (i.e., displayed as preset values)
+String auxMQTTSetting(AutoConnectAux& aux, PageArgument& args) 
+{
+  loadParams(aux);
+  return String();
+}
 
 void ReadInputRegisters()
 {
@@ -422,20 +499,40 @@ void rootPage() {
 }
 */
 
-void handleRoot()
-{
-  String content =
-      "<html>"
-      "<head>"
-      "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
-      "</head>"
-      "<body>"
-      "<p style=\"padding-top:5px;text-align:center\">" AUTOCONNECT_LINK(COG_24) "</p>"
-                                                                                 "</body>"
-                                                                                 "</html>";
+void rootPage() {
+  String  content =
+    "<html>"
+    "<head>"
+    "<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">"
+    "<script type=\"text/javascript\">"
+    "setTimeout(\"location.reload()\", 1000);"
+    "</script>"
+    "</head>"
+    "<body>"
+    "<h2 align=\"center\" style=\"color:blue;margin:20px;\">Hello, world</h2>"
+    "<h3 align=\"center\" style=\"color:gray;margin:10px;\">{{DateTime}}</h3>"
+    "<p style=\"text-align:center;\">Reload the page to update the time.</p>"
+    "<p></p><p style=\"padding-top:15px;text-align:center\">" AUTOCONNECT_LINK(COG_24) "</p>"
+    "</body>"
+    "</html>";
+  static const char *wd[7] = { "Sun","Mon","Tue","Wed","Thr","Fri","Sat" };
+  struct tm *tm;
+  time_t  t;
+  char    dateTime[40];
 
-  //content.replace("{{CHANNEL}}", channelId);
+  t = time(NULL);
+  tm = localtime(&t);
+  sprintf(dateTime, "%04d/%02d/%02d(%s) %02d:%02d:%02d.",
+    tm->tm_year + 1900, tm->tm_mon + 1, tm->tm_mday,
+    wd[tm->tm_wday],
+    tm->tm_hour, tm->tm_min, tm->tm_sec);
+  content.replace("{{DateTime}}", String(dateTime));
   server.send(200, "text/html", content);
+}
+
+void wifiConnect(IPAddress& ip) {
+  Serial.println("WiFi connected:" + WiFi.SSID());
+  Serial.println("IP:" + WiFi.localIP().toString());
 }
 
 void setup()
@@ -469,7 +566,9 @@ void setup()
     Serial.println("STA Failed to configure");
   }
 #endif
-  
+
+// Assign the captive portal popup screen to the URL as the root path.
+  // Reconnect and continue publishing even if WiFi is disconnected.
   autocconfig.ota = AC_OTA_BUILTIN;
   autocconfig.autoReconnect = true; // Attempt automatic reconnection.
   autocconfig.reconnectInterval = 6; // Seek interval time is 180[s].
@@ -479,6 +578,25 @@ void setup()
   autocconfig.autoReconnect = true;
   autocconfig.title = "Growatt2MQTT";
   portal.config(autocconfig);
+  
+  // Join AutoConnectAux pages.
+  portal.join({ mqtt_setting});
+  portal.on(URL_MQTT_SETTING, auxMQTTSetting);
+  
+  // Restore saved MQTT broker setting values.
+  // This example stores all setting parameters as a set of AutoConnectElement,
+  // so they can be restored in bulk using `AutoConnectAux::loadElement`.
+  AutoConnectAux& settings_mqtt = *portal.aux(URL_MQTT_SETTING);
+  //getParams(config);  EPROMM parameter load
+  loadParams(settings_mqtt);
+
+  // This home page is the response content by requestHandler with WebServer,
+  // it does not go through AutoConnect. Such pages register requestHandler
+  // directly using `WebServer::on`.
+  server.on(URL_MQTT_HOME, rootPage);
+
+  portal.onConnect(wifiConnect);
+  
   /*
       server.on("/hello", []()
                 { server.send(200, "text/html", String(F("<html>"
@@ -488,7 +606,7 @@ void setup()
 
       portal.append("/hello", "HELLO"); // Adds an item as HELLO into the menu
   */
-  portal.load(PAGE_MQTT);
+  //portal.load(AUX_MQTT);
   //server.on(URL_MQTT_HOME, handleRoot);
 
   /*
