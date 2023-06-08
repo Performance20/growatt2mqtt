@@ -51,15 +51,16 @@ char topicRoot[TOPPIC_ROOT_SIZE]; // MQTT root topic for the device, + client ID
 
 os_timer_t myTimer;
 
+void saveConfig();
+
 // URLs assigned to the custom web page.
 const char* PARAM_FILE       = "/param.json";
 const char* URL_MQTT_HOME    = "/";
 const char* URL_MQTT_SETTING = "/mqtt_setting";
-const char* URL_MQTT_START   = "/mqtt_start";
-const char* URL_MQTT_CLEAR   = "/mqtt_clear";
-const char* URL_MQTT_STOP    = "/mqtt_stop";
+const char* URL_MQTT_SAVE   = "/mqtt_save";
 
-/ In the declaration,
+
+// In the declaration,
 // Declare AutoConnectElements for the page asf /mqtt_setting
 ACText(header, "<h2>MQTT broker settings</h2>", "text-align:center;color:#2f4f4f;padding:10px;");
 ACText(caption, "Publishing the WiFi signal strength to MQTT channel. RSSI value of ESP8266 to the channel created on ThingSpeak", "font-family:serif;color:#4682b4;");
@@ -74,7 +75,7 @@ ACSubmit(save, "Start", "mqtt_save");
 ACSubmit(discard, "Discard", "/");
 
 // Declare the custom Web page as /mqtt_setting and contains the AutoConnectElements
-AutoConnectAux mqtt_setting("/mqtt_setting", "MQTT Setting", true, {
+AutoConnectAux mqtt_setting(URL_MQTT_SETTING, "MQTT Setting", true, {
   header,
   caption,
   mqttserver,
@@ -95,7 +96,7 @@ ACText(parameters);
 ACSubmit(clear, "Clear channel", "/mqtt_clear");
 
 // Declare the custom Web page as /mqtt_save and contains the AutoConnectElements
-AutoConnectAux mqtt_save("/mqtt_save", "MQTT Setting", false, {
+AutoConnectAux mqtt_save(URL_MQTT_SAVE, "MQTT Setting", false, {
   caption2,
   parameters,
   clear
@@ -103,7 +104,7 @@ AutoConnectAux mqtt_save("/mqtt_save", "MQTT Setting", false, {
 
 // In the setup(),
 // Join the custom Web pages and performs begin
-  portal.join({ mqtt_setting, mqtt_save });
+ //portal.join({mqtt_setting, mqtt_save});
 
 WiFiClient espClient;
 PubSubClient mqtt(mqtt_server, mqtt_server_port, espClient);
@@ -160,6 +161,15 @@ void loadParams(AutoConnectAux& aux)
 String auxMQTTSetting(AutoConnectAux& aux, PageArgument& args) 
 {
   loadParams(aux);
+  return String();
+}
+
+// The behavior of the auxMQTTSetting function below transfers the MQTT API
+// parameters to the value of each AutoConnectInput element on the custom web
+// page. (i.e., displayed as preset values)
+String auxMQTTSave(AutoConnectAux& aux, PageArgument& args) 
+{
+  saveConfig();
   return String();
 }
 
@@ -579,9 +589,10 @@ void setup()
   portal.config(autocconfig);
   
   // Join AutoConnectAux pages.
-  portal.join({ mqtt_setting});
+  portal.join({mqtt_setting, mqtt_save});
   portal.on(URL_MQTT_SETTING, auxMQTTSetting);
-
+  portal.on(URL_MQTT_SAVE, auxMQTTSave);
+  
 
   // Restore saved MQTT broker setting values.
   // This example stores all setting parameters as a set of AutoConnectElement,
