@@ -71,13 +71,14 @@ ACInput(apikey, "", "API Key");
 ACElement(newline, "<hr>");
 ACCheckbox(uniqueid, "unique", "Use APID unique");
 ACRadio(period, { "30 sec.", "60 sec.", "180 sec." }, "Update period", AC_Vertical, 1);
-ACSubmit(save, "Start", "mqtt_save");
+ACSubmit(save, "Save", "mqtt_save");
 ACSubmit(discard, "Discard", "/");
 
 // Declare the custom Web page as /mqtt_setting and contains the AutoConnectElements
 AutoConnectAux mqtt_setting(URL_MQTT_SETTING, "MQTT Setting", true, {
   header,
   caption,
+  newline,
   mqttserver,
   channelid,
   userkey,
@@ -87,7 +88,6 @@ AutoConnectAux mqtt_setting(URL_MQTT_SETTING, "MQTT Setting", true, {
   period,
   newline,
   save,
-  discard
 });
 
 // Declare AutoConnectElements for the page as /mqtt_save
@@ -126,8 +126,8 @@ growattIF growattInterface(MAX485_RE_NEG, MAX485_DE, MAX485_RX, MAX485_TX);
 
 // Reflects the loaded channel settings to global variables; the publishMQTT
 // function uses those global variables to actuate ThingSpeak MQTT API.
-void setParams(AutoConnectAux& aux) 
-{
+void setParams(AutoConnectAux& aux)
+{ 
   memset(&config, '\0', sizeof(configData_t));
   strncpy(config.mqttServer, aux[F("mqttserver")].as<AutoConnectInput>().value.c_str(), sizeof(configData_t::mqttServer) - sizeof('\0'));
   strncpy(config.apikey, aux[F("apikey")].as<AutoConnectInput>().value.c_str(), sizeof(configData_t::apikey) - sizeof('\0'));
@@ -140,9 +140,10 @@ void setParams(AutoConnectAux& aux)
   config.publishInterval = aux[F("period")].as<AutoConnectRadio>().value().substring(0, 2).toInt() * 1000;
 }
 
-void loadParams(AutoConnectAux& aux) 
-{
-  aux[F("mqttserver")].as<AutoConnectInput>().value = config.mqttServer;
+void loadParams(AutoConnectAux& aux)
+{ 
+  aux[F("mqttserver")].as<AutoConnectInput>().value = "HAllo"; //config.mqttServer;
+  /*
   aux[F("apikey")].as<AutoConnectInput>().value = config.apikey;
   aux[F("channelid")].as<AutoConnectInput>().value = config.channelId;
   aux[F("writekey")].as<AutoConnectInput>().value = config.writekey;
@@ -153,6 +154,7 @@ void loadParams(AutoConnectAux& aux)
   aux[F("period")].as<AutoConnectRadio>().checked = config.publishInterval / (30 * 1000);
   if (aux[F("period")].as<AutoConnectRadio>().checked > 3)
     aux[F("period")].as<AutoConnectRadio>().checked = 3;
+    */
 }
 
 // The behavior of the auxMQTTSetting function below transfers the MQTT API
@@ -265,25 +267,60 @@ void saveConfig()
   EEPROM.end();
 }
 
+
+
 void loadConfig()
 {
+
+  memset(&config, '\0', sizeof(config));
+  config.EEpromInit[3] = 0;
+  Serial.printf("Wert vonvor  EEpromIni: %s   \n", config.EEpromInit);
+
   EEPROM.begin(sizeof(config));
   EEPROM.get(EE_START_ADDR, config);
   EEPROM.end();
+  config.EEpromInit[3] = 0;
+  Serial.printf("Wert von nach ee EEpromIni: %s   \n", config.EEpromInit);
 
-  if (memcmp(config.EEpromInit, DefEEpromInit, EE_INIT_STATE_SIZE) != 0) // Init Code found?
+  char pattern[EE_INIT_STATE_SIZE+1];
+  memset(&pattern, '\0', EE_INIT_STATE_SIZE+1);
+  //pattern[EE_INIT_STATE_SIZE] = 0;
+  memcpy(&pattern, CONFIG_SIGN, EE_INIT_STATE_SIZE);
+  config.EEpromInit[3] = 0;
+
+      int t;
+ // t = memcmp(config.EEpromInit, pattern, EE_INIT_STATE_SIZE);
+  Serial.printf("Wert von pattern: %s   \n", pattern);
+  Serial.printf("Wert von memcmp: %d   \n", t);
+  Serial.printf("Wert von EEpromIni: %s   \n", config.EEpromInit);
+
+  if (memcmp(&config.EEpromInit[0], &pattern[0], EE_INIT_STATE_SIZE) != 0) // Init Code found?
   { // No
-    memcpy(config.EEpromInit, DefEEpromInit, EE_INIT_STATE_SIZE); // initialize eeprom with default values 
+    memcpy(&config.EEpromInit[0], &pattern[0], EE_INIT_STATE_SIZE); // initialize eeprom with default values
     config.modbus_update_sec = UPDATE_MODBUS;
     config.status_update_sec = UPDATE_STATUS;
     config.wificheck_sec = WIFICHECK;
+    memset(&config.id, '\0', sizeof(config.id));
+    memset(&config.mqttServer, '\0', sizeof(config.mqttServer));
+    memset(&config.apikey, '\0', sizeof(config.apikey));
+    memset(&config.channelId, '\0', sizeof(config.channelId));
+    memset(&config.writekey, '\0', sizeof(config.writekey));
+    memset(&config.clientId, '\0', sizeof(config.clientId));
+    memset(&config.username, '\0', sizeof(config.username));
+    memset(&config.password, '\0', sizeof(config.password));
+    memset(&config.hostname, '\0', sizeof(config.hostname));
+    config.publishInterval = 100;
     saveConfig();
-    ESP.eraseConfig();
+    //ESP.eraseConfig();
 #ifdef DEBUG_SERIAL
     delay(3000);
     Serial.println(F("Reset eesprom values to default and clean Wifi settings"));
 #endif
   }
+ else
+ {
+    Serial.println(F("Find EEprom values"));
+ } 
 }
 
 // MQTT reconnect logic
@@ -564,9 +601,6 @@ void setup()
   updateStatus = true;
   checkWifi = true;
 
-
-
-
   // Connect to Wifi
 #ifdef FIXEDIP
   // Configures static IP address
@@ -578,12 +612,12 @@ void setup()
 
 // Assign the captive portal popup screen to the URL as the root path.
   // Reconnect and continue publishing even if WiFi is disconnected.
-  autocconfig.ota = AC_OTA_BUILTIN;
+ // autocconfig.ota = AC_OTA_BUILTIN;
   autocconfig.autoReconnect = true; // Attempt automatic reconnection.
   autocconfig.reconnectInterval = 6; // Seek interval time is 180[s].
   autocconfig.retainPortal = true;   // Keep the captive portal open.
-  autocconfig.homeUri = URL_MQTT_HOME;
-  autocconfig.bootUri = AC_ONBOOTURI_HOME;
+ // autocconfig.homeUri = URL_MQTT_HOME;
+ // autocconfig.bootUri = AC_ONBOOTURI_HOME;
   autocconfig.autoReconnect = true;
   autocconfig.title = "Growatt2MQTT";
   portal.config(autocconfig);
@@ -600,6 +634,7 @@ void setup()
   AutoConnectAux& settings_mqtt = *portal.aux(URL_MQTT_SETTING);
   loadConfig(); //  EPROMM parameter load
   loadParams(settings_mqtt);
+
 #ifdef DEBUG_SERIAL
   Serial.println(F("Load Update values"));
   Serial.printf("Values via Modbus: %d sec\n", config.modbus_update_sec);
