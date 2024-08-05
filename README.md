@@ -1,6 +1,9 @@
 # Growatt Solar Inverter Modbus Data to MQTT Gateway
 This sketch runs on an ESP8266 and reads data from Growatt Solar Inverter over RS485 Modbus and publishes the data over MQTT. This code can be modified for any Gorwatt inverters, it has been tested on 1 phase, 2 string inverter version such as my MIN 3000 TL-XE, MIC 1500 TL-X, MIC 600 TL-X. You find attached to this repo the documentation I used to get data out of the inverter.
 
+In addition it supports an AHT10, AHT15, AHT20 sensor family temperature sensor.
+A web interface for monitoring and controlling the inverter is also available.
+
 ![Setup](/img/setup.jpg)
 
 This sketch publishes the following information from the holding registers that store device configuration data. More on these please refer to the modbus PDF documentation. This is sent once at startup:
@@ -39,13 +42,15 @@ To reset the Wifi credentials, change minimum one of the numbers in globals.h (E
 ## Topic
 the topicroot can be changed in the settings.h file (default is growatt).
 
+BREAKING CHANGE: now data and settings values are provided as individual topics (earlier versions provided the data as one json oject) 
+
 topic | direction | value | function
 ---|----|----|--
 topicroot/status | publish | | send status of the ESP8266
-topicroot/data   | publish | | send power state of the growatt
+topicroot/data   | publish | | send power state of the growatt as single data tracks
 topicroot/error  | publish | | send error state 
 topicroot/connection |publish || send connection state of the ESP8266 uses the last will of the broker
-topicroot/settings | publish || send settings from growatt
+topicroot/settings | publish || send settings from growatt as single data tracks
 topicroot/write/getSettings | subscribe |ON | initializes the resending of the settings
 topicroot/write/setEnable | subscribe | ON/OFF | enable/disable the output of the growatt
 topicroot/write/setMaxOutput | subscribe | 0-100 | set the output level of the growatt in percent 
@@ -106,15 +111,46 @@ To make this project work (modbus communnication and the web bits (MQTT, HTTP) y
 And if you want to wire them yourself, these are the connections:
 ```
 Wemod D1 mini (or other ESP)            TTL to RS485
-D1                                      DE
-D2                                      RE
+D0                                      DE
+D7                                      RE
 D5                                      RO
 D6                                      DI
 5V                                      VCC
 G(GND)                                  GND
 
+Wemod D1 mini (or other ESP)            AHT Temperature Sensor
+D1                                      SCL
+D2                                      SDA
+
+
 Please adapt the Pin Definitions in the settings.h
 ```
+
+## Webinterface List of URLs
+GET/POST | URL | Description 
+---|----|---
+GET | / | Inverter Status and Settings 
+GET | /modbus | last readout of Modbus Input and Holding Registers
+GET | /api/limit/percent | get active power Limit of Inverter
+POST| /api/limit/percent | set active power Limit of Inverter to Values between 1 and 100 %
+GET | /api/onoff | get Inverter power state (0-off, 1-on)
+POST| /api/onoff | set Inverter power state (0-off, 1-on)
+
+## Web API Inverter Control Examples
+
+In general: If you dont want to control your inverter through the webAPI, remove line #define ENABLE_WEBAPI_POST in settings.h
+
+Command | curl request 
+---|----
+Limit Inverter to 50% | curl -v http://\<yourIPAdress\>/api/limit/percent -d '50'
+Switch Inverter on | curl -v http://\<yourIPAdress\>/api/onoff -d '1'
+
+Return Code | Description 
+---|----
+200 | Operation successful
+404 | Wrong request i.e. parameter out of range or not provided
+500 | failed to set Value
+
 
 ## Videos
 

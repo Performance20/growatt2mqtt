@@ -1,6 +1,6 @@
 // Growatt Solar Inverter to MQTT
 // Repo: https://github.com/nygma2004/growatt2mqtt
-// author: Csongor Varga, csongor.varga@gmail.com, some adaption by Helge
+// author: Csongor Varga, csongor.varga@gmail.com, some adaption by Helge and Hendrik
 // 1 Phase, 2 string inverter version such as MIN 3000 TL-XE, MIC 1500 TL-X
 //
 // Libraries:
@@ -55,7 +55,6 @@ char fullClientID[CLIENT_ID_SIZE];
 char topicRoot[TOPPIC_ROOT_SIZE]; // MQTT root topic for the device, + client ID
 
 os_timer_t myTimer;
-//ESP8266WebServer server(80);
 AsyncWebServer server(80);
 WiFiClient espClient;
 PubSubClient mqtt(mqtt_server, mqtt_server_port, espClient);
@@ -69,7 +68,6 @@ growattIF growattInterface(MAX485_RE_NEG, MAX485_DE, MAX485_RX, MAX485_TX);
 
 void ReadInputRegisters()
 {
-  char json[MAX_JSON_TOPIC_LENGTH];
   char topic[MAX_ROOT_TOPIC_LENGTH];
   uint8_t result;
 
@@ -77,23 +75,15 @@ void ReadInputRegisters()
   result = growattInterface.ReadInputRegisters();
   if (result == growattInterface.Success)
   {
-    growattInterface.InputRegistersToJson(json);
-#ifdef DEBUG_MQTT
-    Serial.println(json);
-#endif
     snprintf(topic, MAX_ROOT_TOPIC_LENGTH, "%s/data", topicRoot);
-    mqtt.publish(topic, json);
-#ifdef DEBUG_MQTT
-    Serial.println("Data MQTT sent");
-#endif    
+    growattInterface.PublishInputRegisters(&mqtt,topic);
   }
   else 
   {
     Serial.print(F("Error: "));
-    String message = growattInterface.sendModbusError(result);
-    Serial.println(message);
+    Serial.println(growattInterface.getModbusErrorString(result));
     snprintf(topic, MAX_ROOT_TOPIC_LENGTH , "%s/error", topicRoot);
-    mqtt.publish(topic, message.c_str());
+    mqtt.publish(topic, growattInterface.getModbusErrorString(result));
     delay(5);
   }
   digitalWrite(STATUS_LED, 1);
@@ -101,35 +91,25 @@ void ReadInputRegisters()
 
 void ReadHoldingRegisters()
 {
-  char json[MAX_JSON_TOPIC_LENGTH];
   char topic[MAX_ROOT_TOPIC_LENGTH];
-
   uint8_t result;
 
   digitalWrite(STATUS_LED, 0);
   result = growattInterface.ReadHoldingRegisters();
   if (result == growattInterface.Success)
   {
-    growattInterface.HoldingRegistersToJson(json);
-#ifdef DEBUG_MQTT
-    Serial.println(json);
-#endif
     snprintf(topic, MAX_ROOT_TOPIC_LENGTH, "%s/settings", topicRoot);
-    mqtt.publish(topic, json);
-#ifdef DEBUG_MQTT
-    Serial.println("Setting MQTT sent");
-#endif    
+    growattInterface.PublishHoldingRegisters(&mqtt,topic);
+
     // Set the flag to true not to read the holding registers again
     holdingregisters = false;
   }
   else
   {
     Serial.print(F("Error: "));
-    String message;
-    message = growattInterface.sendModbusError(result);
-    Serial.println(message);
+    Serial.println(growattInterface.getModbusErrorString(result));
     snprintf(topic, MAX_ROOT_TOPIC_LENGTH, "%s/error", topicRoot);
-    mqtt.publish(topic, message.c_str());
+    mqtt.publish(topic, growattInterface.getModbusErrorString(result));
     delay(5);
   }
   digitalWrite(STATUS_LED, 1);
@@ -263,7 +243,7 @@ void callback(char *topic, byte *payload, unsigned int length)
       }
       else
       {
-        snprintf(json, MAX_JSON_TOPIC_LENGTH, "last trasmition has faild with: %s", growattInterface.sendModbusError(result).c_str());
+        snprintf(json, MAX_JSON_TOPIC_LENGTH, "last trasmition has faild with: %s", growattInterface.getModbusErrorString(result));
         snprintf(rootTopic, MAX_ROOT_TOPIC_LENGTH, "%s/error", topicRoot);
         mqtt.publish(rootTopic, json);
       }
@@ -275,8 +255,9 @@ void callback(char *topic, byte *payload, unsigned int length)
         {
           holdingregisters = true;
         }
+        else
         {
-          snprintf(json, MAX_JSON_TOPIC_LENGTH, "last trasmition has faild with: %s", growattInterface.sendModbusError(result).c_str());
+          snprintf(json, MAX_JSON_TOPIC_LENGTH, "last trasmition has faild with: %s", growattInterface.getModbusErrorString(result));
           snprintf(rootTopic, MAX_ROOT_TOPIC_LENGTH, "%s/error", topicRoot);
           mqtt.publish(rootTopic, json);
         }
@@ -293,7 +274,7 @@ void callback(char *topic, byte *payload, unsigned int length)
     }
     else
     {
-      snprintf(json, MAX_JSON_TOPIC_LENGTH, "last trasmition has faild with: %s", growattInterface.sendModbusError(result).c_str());
+      snprintf(json, MAX_JSON_TOPIC_LENGTH, "last trasmition has faild with: %s", growattInterface.getModbusErrorString(result));
       snprintf(rootTopic, MAX_ROOT_TOPIC_LENGTH, "%s/error", topicRoot);
       mqtt.publish(rootTopic, json);
     }
@@ -309,7 +290,7 @@ void callback(char *topic, byte *payload, unsigned int length)
     }
     else
     {
-      snprintf(json, MAX_JSON_TOPIC_LENGTH, "last trasmition has faild with: %s", growattInterface.sendModbusError(result).c_str());
+      snprintf(json, MAX_JSON_TOPIC_LENGTH, "last trasmition has faild with: %s", growattInterface.getModbusErrorString(result));
       snprintf(rootTopic, MAX_ROOT_TOPIC_LENGTH, "%s/error", topicRoot);
       mqtt.publish(rootTopic, json);
     }
@@ -334,7 +315,7 @@ void callback(char *topic, byte *payload, unsigned int length)
     }
     else
     {
-      snprintf(json, MAX_JSON_TOPIC_LENGTH, "last trasmition has faild with: %s", growattInterface.sendModbusError(result).c_str());
+      snprintf(json, MAX_JSON_TOPIC_LENGTH, "last trasmition has faild with: %s", growattInterface.getModbusErrorString(result));
       snprintf(rootTopic, MAX_ROOT_TOPIC_LENGTH, "%s/error", topicRoot);
       mqtt.publish(rootTopic, json);
     }
@@ -475,8 +456,67 @@ void setup()
     os_timer_arm(&myTimer, 1000, true);
 
     server.on("/", HTTP_GET, [&](AsyncWebServerRequest *request)
-              { request->send(200, "text/plain", "Growatt Solar Inverter to MQTT Gateway"); });
+              { request->send(200, "text/html", growattInterface.getWebStatusPage(uptime)); });
 
+    server.on("/modbus", HTTP_GET, [&](AsyncWebServerRequest *request)
+              { request->send(200, "text/html", growattInterface.getWebModbuStatusPage()); });
+
+    server.on("/api/limit/percent", HTTP_GET, [&](AsyncWebServerRequest *request)
+              { 
+              char responseText[16];
+              snprintf(responseText, 16, "%i", growattInterface.readRegister(growattInterface.regMaxOutputActive));
+              request->send(200, "text/plain", responseText); 
+              });
+
+    server.on("/api/onoff", HTTP_GET, [&](AsyncWebServerRequest *request)
+              { 
+              char responseText[16];
+              snprintf(responseText, 16, "%i", growattInterface.readRegister(growattInterface.regOnOff));
+              request->send(200, "text/plain", responseText); 
+              });
+
+#ifdef ENABLE_WEBAPI_POST
+    server.on("/api/limit/percent", HTTP_POST, [](AsyncWebServerRequest * request) 
+            {
+              int postParamCount = request->params(); 
+              if (postParamCount < 1) request->send(404);
+
+              AsyncWebParameter * j = request->getParam(0); // 1st parameter 
+              int newPowerLimit = (int)j->value().toInt();
+              if (newPowerLimit > 1 && newPowerLimit <= 100) {
+              
+                uint8_t result = growattInterface.writeRegister(growattInterface.regMaxOutputActive, newPowerLimit);
+                if (result == growattInterface.Success)
+                {
+                  holdingregisters = true;
+                  request->send(200);
+                }else {
+                  request->send(500);
+                }
+              } else request->send(404);
+    });
+
+
+    server.on("/api/onoff", HTTP_POST, [](AsyncWebServerRequest * request) 
+            {
+              int postParamCount = request->params(); 
+              if (postParamCount < 1) request->send(404);
+
+              AsyncWebParameter * j = request->getParam(0); // 1st parameter 
+              int newPowerState = (int)j->value().toInt();
+              if (newPowerState == 0 || newPowerState == 1) {
+              
+                uint8_t result = growattInterface.writeRegister(growattInterface.regOnOff, newPowerState);
+                if (result == growattInterface.Success)
+                {
+                  holdingregisters = true;
+                  request->send(200);
+                }else {
+                  request->send(500);
+                }
+              } else request->send(404);
+    });
+#endif
     server.begin();
     Serial.println(F("HTTP server started"));
 

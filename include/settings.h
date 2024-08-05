@@ -1,16 +1,19 @@
 //#define DEBUG_SERIAL    
 //#define DEBUG_MQTT       
 #define useModulPower   
-#define AHTXX_SENSOR               // add support for the AHT10, AHT15, AHT20 sensor family 
+//#define AHTXX_SENSOR               // add support for the AHT10, AHT15, AHT20 sensor family 
+
+#define ENABLE_WEBAPI_POST               // enables Inverter Control via Web API
+
 
 #define SERIAL_RATE     115200    // Serial speed for status info
-#define MAX485_DE       16        // D0, DE pin on the TTL to RS485 converter
+#define MAX485_DE       16         // D0, DE pin on the TTL to RS485 converter
 #define MAX485_RE_NEG   13        // D7, RE pin on the TTL to RS485 converter
 #define MAX485_RX       14        // D5, RO pin on the TTL to RS485 converter
 #define MAX485_TX       12        // D6, DI pin on the TTL to RS485 converter
 #define STATUS_LED      2         // Status LED on the Wemos D1 mini (D4)
-#define SCL_PIN         5
-#define SDA_PIN         4
+#define SCL_PIN         5         // D1/SCL to Pin SCL on AHT Sensor
+#define SDA_PIN         4         // D2/SDA to Pin SDA on AHT Sensor
 #define UPDATE_MODBUS   10         // 1: modbus device is read every second and data are anounced via mqtt
 #define UPDATE_STATUS   30        // 10: status mqtt message is sent every 10 seconds
 #define WIFICHECK       1           // 1: every second
@@ -20,7 +23,7 @@
 const char mqtt_server[] = "";    // MQTT server
 const int mqtt_server_port = 1883;             // MQTT server port, default is 1883
 const char mqtt_user[] = "none";               // MQTT userid
-const char mqtt_password[] = "none";        // MQTT password
+const char mqtt_password[] = "nome";        // MQTT password
 const char clientID[] = "growatt";       // MQTT client ID
 const char topicRootStart[] = "growatt";      // MQTT root topic for the device, + client ID
 

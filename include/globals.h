@@ -1,6 +1,6 @@
 unsigned long uptime, seconds;
 bool holdingregisters = true;
-const char buildversion[]="v1.3.0Helge";
+const char buildversion[]="v2.0.0";
 
 #define EE_START_ADDR 0x00 // start address of values stored in the eeprom
 #define EE_INIT_STATE_SIZE 4
